@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Manager Cloud v13</title>
+    <style>
+    /* --- Modern AI-like Theme --- */
+    :root {
+        --bg: #131314;           /* Gemini Dark Background */
+        --sidebar-bg: #1e1f20;   /* Sidebar Dark */
+        --accent: #a8c7fa;       /* Google Blue-ish */
+        --accent-hover: #8ab4f8;
+        --text: #e3e3e3;
+        --sub: #8e918f;
+        --danger: #ff8985;
+        --modal-bg: #2d2e35;
+        --card-bg: #1e1f20;
+        --card-border: #444746;
+        --input-bg: #2d2e35;
+    }
+    * { box-sizing: border-box; font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; }
+    body { background-color: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    a { text-decoration: none; color: inherit; }
+
+    /* --- 認証画面 (Simple & Clean) --- */
+    #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+    .auth-card { background: var(--sidebar-bg); padding: 40px; border-radius: 24px; width: 360px; text-align: center; border: 1px solid var(--card-border); }
+    .auth-title { color: var(--text); margin-bottom: 25px; font-size: 1.5rem; font-weight: 500; }
+    .input-field { width: 100%; padding: 16px; margin-bottom: 15px; background: var(--input-bg); border: 1px solid transparent; color: var(--text); border-radius: 12px; outline: none; transition: 0.2s; font-size: 1rem; }
+    .input-field:focus { border-color: var(--accent); background: var(--bg); }
+    .btn-auth { width: 100%; padding: 14px; background: var(--accent); color: #004a77; font-weight: bold; border: none; border-radius: 24px; cursor: pointer; font-size: 1rem; margin-top: 10px; transition: 0.2s; }
+    .btn-auth:hover { background: var(--accent-hover); }
+    .toggle-text { margin-top: 20px; font-size: 0.9rem; color: var(--accent); cursor: pointer; }
+    .error-msg { color: var(--danger); font-size: 0.9rem; margin-bottom: 15px; min-height: 1.2em; }
+
+    /* --- レイアウト --- */
+    #appContainer { display: none; height: 100%; flex-direction: row; width: 100%; }
+    
+    .sidebar { width: 260px; background-color: var(--sidebar-bg); display: flex; flex-direction: column; padding: 20px; border-right: none; flex-shrink: 0; transition: margin-left 0.3s ease; z-index: 50; }
+    .sidebar.hidden { margin-left: -260px; }
+    
+    .app-title-wrapper { display: flex; align-items: center; margin-bottom: 30px; padding-left: 10px; }
+    .app-title-input { background: transparent; border: none; color: var(--text); font-size: 1.3rem; font-weight: 500; width: 100%; outline: none; }
+    .app-title-icon { margin-right: 10px; color: var(--accent); font-size: 1.2rem; }
+
+    .sidebar-menu { list-style: none; overflow-y: auto; flex-grow: 1; margin-bottom: 20px; }
+    .menu-label { font-size: 0.75rem; color: var(--sub); margin: 15px 0 10px 10px; font-weight: 500; }
+    
+    .menu-item { padding: 10px 15px; margin-bottom: 4px; border-radius: 24px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; color: var(--text); }
+    .menu-item:hover { background-color: rgba(255, 255, 255, 0.08); }
+    .menu-item.active { background-color: #004a77; color: var(--accent); font-weight: 500; }
+    .menu-item.draggable { cursor: grab; }
+    .menu-item.dragging { opacity: 0.5; }
+    .menu-actions { opacity: 0; transition: opacity 0.2s; display: flex; gap: 8px; }
+    .menu-item:hover .menu-actions { opacity: 1; }
+    
+    .sort-area { padding: 15px 0; border-top: 1px solid var(--card-border); }
+    .sort-select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--card-border); padding: 8px; border-radius: 8px; outline: none; cursor: pointer; }
+    .btn-add-folder { width: 100%; padding: 12px; background: transparent; border: 1px solid var(--card-border); color: var(--sub); text-align: center; border-radius: 24px; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
+    .btn-add-folder:hover { border-color: var(--sub); color: var(--text); }
+
+    .main-content { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%; position: relative; background: var(--bg); }
+    
+    .header-area { padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; background: var(--bg); z-index: 10; flex-shrink: 0; }
+    .header-left { display: flex; align-items: center; gap: 20px; flex-grow: 1; }
+    .btn-menu-toggle { background: none; border: none; color: var(--sub); font-size: 1.5rem; cursor: pointer; }
+    .btn-menu-toggle:hover { color: var(--text); }
+    
+    .search-container { position: relative; max-width: 600px; width: 100%; }
+    .search-input { width: 100%; background: var(--input-bg); border: none; padding: 12px 20px 12px 45px; border-radius: 24px; color: var(--text); outline: none; transition: 0.2s; font-size: 1rem; }
+    .search-input:focus { background: #3c3d43; box-shadow: 0 1px 6px rgba(0,0,0,0.3); }
+    .search-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--sub); font-size: 1rem; }
+    .current-folder-name { font-size: 1.2rem; font-weight: 500; display: none; }
+    
+    .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .btn-icon-header { background: transparent; border: none; color: var(--text); width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; transition: 0.2s; }
+    .btn-icon-header:hover { background: rgba(255,255,255,0.1); }
+    .btn-primary { background-color: var(--accent); color: #004a77; padding: 10px 24px; border-radius: 24px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+    .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 2px 8px rgba(0,0,0,0.2); transform: none; }
+
+    /* --- View Container & Link Cards --- */
+    .view-container { 
+        flex-grow: 1; 
+        height: 100%; 
+        overflow: hidden; /* コンテナ自体はスクロールしない */
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Grid View (Scrollable) */
+    .link-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); 
+        gap: 16px; 
+        padding: 20px 40px 50px 40px;
+        overflow-y: auto; /* ★重要: グリッド側でスクロールさせる */
+        height: 100%;
+    }
+    
+    .link-card { 
+        height: 180px; border-radius: 16px; overflow: hidden; position: relative; cursor: pointer; 
+        transition: background 0.2s; display: flex; flex-direction: column;
+        border: 1px solid var(--card-border); background: var(--card-bg); box-shadow: none;
+    }
+    .link-card.selected { border: 2px solid var(--accent); background: #2a2b30; }
+    .link-card:hover { background: #2a2b30; border-color: #5e6065; }
+    
+    .card-upper { flex: 1; background: transparent; padding: 20px; display: flex; flex-direction: column; justify-content: flex-start; text-align: left; }
+    .card-upper::before { display: none; }
+    .link-title { font-size: 1rem; font-weight: 400; color: var(--text); line-height: 1.5; text-shadow: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    
+    .card-lower { height: 40px; background: transparent; padding: 0 20px 15px 20px; display: flex; justify-content: space-between; align-items: center; border-top: none; }
+    .card-tags { display: flex; gap: 6px; overflow: hidden; white-space: nowrap; }
+    .tag { background: #333; color: var(--sub); padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+    .card-actions { display: flex; gap: 10px; }
+    .mini-btn { font-size: 1.1rem; cursor: pointer; color: var(--sub); transition: 0.2s; }
+    .mini-btn:hover { color: var(--text); }
+
+    /* Modals */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 200; }
+    .modal { background: var(--modal-bg); padding: 30px; border-radius: 24px; width: 500px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .form-group label { color: var(--sub); margin-bottom: 8px; }
+    .form-group input, .form-group select { background: var(--input-bg); border: 1px solid var(--card-border); color: var(--text); border-radius: 8px; }
+
+    /* Settings Menu */
+    /* Settings Menu (修正版: fixed配置で切り取り回避) */
+    .settings-menu { 
+        position: fixed; /* absoluteだと親のoverflowで切れるのでfixedに変更 */
+        top: 70px;       /* ヘッダーのすぐ下 */
+        right: 30px; 
+        background: var(--modal-bg); 
+        border: 1px solid var(--card-border); 
+        border-radius: 12px; 
+        width: 220px; 
+        display: none; 
+        flex-direction: column; 
+        overflow: hidden; 
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5); 
+        z-index: 9999;   /* 最前面に表示 */
+    }
+    .settings-menu.show { display: flex; }
+    
+    .settings-item { padding: 12px 20px; border-bottom: 1px solid var(--card-border); color: var(--text); cursor: pointer; }
+    .settings-item:last-child { border-bottom: none; }
+    .settings-item:hover { background: rgba(255,255,255,0.05); }
+    .settings-item.danger { color: var(--danger); }
+    .settings-item.danger:hover { background: rgba(255, 71, 87, 0.1); }
+
+    /* Multi View (Scrollable horizontally) */
+    .multi-scroll-view { 
+        display: none; 
+        flex-grow: 1; 
+        width: 100%;
+        height: 100%;
+        padding: 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 16px;
+        align-items: stretch;
+        box-sizing: border-box;
+    }
+    
+    .preview-frame-wrapper { 
+        width: auto;
+        display: flex; 
+        flex-direction: column; 
+        background: #fff; 
+        border-radius: 8px; 
+        border: 1px solid var(--card-border); 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
+        overflow: hidden; 
+        flex-shrink: 0; 
+    }
+
+    .preview-frame-wrapper iframe {
+        width: 100%;
+        height: 0;      
+        flex-grow: 1;   
+        border: none;
+        background: #fff;
+    }
+
+    .preview-header {
+        background: #222; 
+        color: #fff; 
+        padding: 8px 12px; 
+        display: flex; 
+        justify-content: space-between; 
+        font-size: 0.85rem; 
+        cursor: grab; 
+        user-select: none;
+        flex-shrink: 0;
+    }
+
+    .preview-panel { position: fixed; top: 0; right: -700px; width: 700px; height: 100%; background: var(--sidebar-bg); box-shadow: -5px 0 20px rgba(0,0,0,0.3); transition: right 0.3s ease; z-index: 100; display: flex; flex-direction: column; border-left: 1px solid var(--card-border); }
+    .preview-panel.open { right: 0; }
+    .panel-header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); }
+    
+    /* Preset Grid (Hidden functionality but kept for safety) */
+    .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .preset-card { background: #111; border: 1px solid #333; padding: 15px; text-align: center; border-radius: 8px; cursor: pointer; font-size: 0.9rem; color: #ccc; transition: 0.2s; }
+    .preset-card:hover, .preset-card.selected { border-color: var(--accent); background: rgba(0,212,255,0.1); color: #fff; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <div id="authOverlay">
+        <div class="auth-card">
+            <div class="auth-title" id="authTitle">Link Manager</div>
+            <div id="authError" class="error-msg"></div>
+            <input type="text" id="inputNick" class="input-field" placeholder="ニックネーム (半角英数)" oninput="Auth.clearError()">
+            <input type="password" id="inputPass" class="input-field" placeholder="パスワード (6文字以上)" oninput="Auth.clearError()">
+            <button class="btn-auth" id="btnAction" onclick="Auth.submit()">ログイン</button>
+            <div class="toggle-text" id="toggleMode" onclick="Auth.toggleMode()">アカウント作成はこちら</div>
+        </div>
+    </div>
+
+    <div id="appContainer">
+        <aside class="sidebar" id="sidebar">
+            <div class="app-title-wrapper">
+                <span class="app-title-icon">✦</span>
+                <input type="text" id="appTitleInput" class="app-title-input" value="Link Manager" onblur="App.saveAppTitle(this.value)">
+            </div>
+            <div class="menu-label">MENU</div>
+            <ul class="sidebar-menu" id="folderList"></ul>
+            <div class="sort-area">
+                <div class="menu-label" style="margin-top:0;">並び替え</div>
+                <select class="sort-select" onchange="App.setSort(this.value)">
+                    <option value="dateDesc">追加日 (新しい順)</option>
+                    <option value="dateAsc">追加日 (古い順)</option>
+                    <option value="nameAsc">名前 (A-Z)</option>
+                    <option value="nameDesc">名前 (Z-A)</option>
+                </select>
+            </div>
+            <div style="margin-top:15px;"><div class="btn-add-folder" onclick="App.openFolderModal()">+ フォルダ作成</div></div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header-area">
+                <div class="header-left">
+                    <button class="btn-menu-toggle" onclick="App.toggleSidebar()">≡</button>
+                    <div class="current-folder-info"><h2 id="currentFolderName" class="current-folder-name">...</h2></div>
+                    <div class="search-container"><span class="search-icon">🔍</span><input type="text" id="searchInput" class="search-input" placeholder="Search..." oninput="App.onSearch(this.value)"></div>
+                </div>
+                <div class="header-right">
+                    <span id="selectionArea" style="display:none; align-items:center;">
+                        <button class="btn-clear-selection" onclick="App.clearSelection()">クリア</button>
+                        <span id="selectionCount" style="color:var(--accent); font-weight:bold; margin-right:10px;"></span>
+                    </span>
+                    <button class="btn-primary" id="btnMultiDelete" onclick="App.deleteSelectedLinks()" style="background:var(--danger); color:#fff; display:none;">ゴミ箱</button>
+                    <button class="btn-primary" id="btnMultiPreview" onclick="App.toggleMultiView()" disabled>一括プレビュー</button>
+                    <button class="btn-primary" onclick="App.openLinkModal()">+ 追加</button>
+                    <div style="position:relative;">
+                        <button class="btn-icon-header" onclick="App.toggleSettingsMenu()">⚙️</button>
+                        <div class="settings-menu" id="settingsMenu">
+                            <div class="settings-item">User: <span id="menuUserName"></span></div>
+                            <div class="settings-item" onclick="App.openBgModal()">壁紙設定</div>
+                            <div class="settings-item" onclick="Auth.logout()">ログアウト</div>
+                            <div class="settings-item danger" onclick="Auth.confirmDeleteAccount()">アカウント削除</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="view-container">
+                <div id="gridView" class="link-grid"></div>
+                <div id="multiView" class="multi-scroll-view"></div>
+            </div>
+        </main>
+
+        <div id="previewPanel" class="preview-panel">
+            <div class="panel-header"><span class="panel-title" id="previewTitle" style="font-weight:bold;">Preview</span><div><a id="previewExtLink" href="#" target="_blank" style="color:var(--accent);">別タブ ↗</a><span style="margin-left:15px; cursor:pointer;" onclick="App.closePreview()">✕</span></div></div>
+            <iframe id="previewFrame" src=""></iframe>
+        </div>
+
+        <div class="modal-overlay" id="folderModal">
+            <div class="modal" style="width:400px;">
+                <h3 style="color:var(--accent); margin-bottom:20px;">フォルダ編集</h3>
+                <input type="hidden" id="editFolderId">
+                <div class="form-group"><label>名称</label><input type="text" id="inputFolderName"></div>
+                <div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn-icon-header" onclick="App.closeModals()">✕</button><button class="btn-primary" onclick="App.saveFolder()">保存</button></div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="linkModal">
+            <div class="modal" style="width:400px;">
+                <h3 style="color:var(--accent); margin-bottom:20px;">リンク編集</h3>
+                <input type="hidden" id="editLinkId">
+                <div class="form-group"><label>タイトル</label><input type="text" id="inputLinkTitle"></div>
+                <div class="form-group"><label>URL</label><input type="text" id="inputLinkUrl" onblur="App.autoDetectEmbed(this.value)"></div>
+                <div class="form-group"><label>タグ (カンマ区切り)</label><input type="text" id="inputLinkTags"></div>
+                <div class="form-group"><label>フォルダ</label><select id="selectFolder"></select></div>
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;"><input type="checkbox" id="checkNoEmbed" style="width:auto; margin:0;"><span style="font-size:0.85rem; color:#aaa;">プレビュー不可 (別タブで開く)</span></div>
+                <div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn-icon-header" onclick="App.closeModals()">✕</button><button class="btn-primary" onclick="App.saveLink()">保存</button></div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="bgModal">
+            <div class="modal">
+                <h3 style="color:var(--accent); margin-bottom:15px;">テーマ選択</h3>
+                <p style="font-size:0.85rem; color:#aaa; margin-bottom:15px;">天候や時間帯を選んで、アプリの雰囲気を変えましょう。</p>
+                <div class="preset-grid" id="presetGrid">
+                    </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                    <button class="btn-icon-header" onclick="App.closeModals()">✕</button>
+                    <button class="btn-primary" onclick="App.saveBgSettings()">適用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCqj0XEcTNQopo1Bef2JpJtYoKRYdq3hQo",
+            authDomain: "link-manager-app-3a9ab.firebaseapp.com",
+            projectId: "link-manager-app-3a9ab",
+            storageBucket: "link-manager-app-3a9ab.firebasestorage.app",
+            messagingSenderId: "630612874566",
+            appId: "1:630612874566:web:6aa9899cf4f190b93e8147"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const DOMAIN_SUFFIX = "@linkmanager.local";
+        const BLOCKED_DOMAINS = ['google.', 'youtube.com', 'youtu.be', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'linkedin.com', 'github.com', 'yahoo.', 'amazon.', 'netflix.com'];
+
+        // --- Visual Effects Engine (Deprecated but kept to prevent errors) ---
+        const Visuals = {
+            themes: {},
+            setTheme(key) {}, // No-op
+            startFlash() {},
+            stopFlash() {}
+        };
+
+        window.Auth = {
+            isLoginMode: true, currentUser: null,
+            init() {
+                onAuthStateChanged(auth, (user) => {
+                    this.currentUser = user;
+                    if (user) {
+                        document.getElementById('authOverlay').style.opacity = '0';
+                        setTimeout(() => document.getElementById('authOverlay').style.display = 'none', 300);
+                        document.getElementById('appContainer').style.display = 'flex';
+                        const name = user.displayName || user.email.split('@')[0];
+                        document.getElementById('menuUserName').textContent = name;
+                        App.init(user);
+                    } else {
+                        document.getElementById('authOverlay').style.display = 'flex';
+                        setTimeout(() => document.getElementById('authOverlay').style.opacity = '1', 10);
+                        document.getElementById('appContainer').style.display = 'none';
+                        App.reset();
+                    }
+                });
+            },
+            toggleMode() {
+                this.isLoginMode = !this.isLoginMode;
+                document.getElementById('authTitle').textContent = this.isLoginMode ? "Link Manager" : "新規登録";
+                document.getElementById('btnAction').textContent = this.isLoginMode ? "ログイン" : "登録して開始";
+                document.getElementById('toggleMode').textContent = this.isLoginMode ? "アカウント作成はこちら" : "ログイン画面に戻る";
+                document.getElementById('authError').textContent = "";
+            },
+            clearError() { document.getElementById('authError').textContent = ""; },
+            async submit() {
+                const nick = document.getElementById('inputNick').value.trim();
+                const pass = document.getElementById('inputPass').value;
+                const errorEl = document.getElementById('authError');
+                if (!nick || !pass) return errorEl.textContent = "入力してください";
+                if (!/^[a-zA-Z0-9]+$/.test(nick)) return errorEl.textContent = "ニックネームは半角英数字のみです";
+                if (pass.length < 6) return errorEl.textContent = "パスワードは6文字以上必要です";
+                const email = nick + DOMAIN_SUFFIX;
+                try {
+                    if (this.isLoginMode) await signInWithEmailAndPassword(auth, email, pass);
+                    else {
+                        const uc = await createUserWithEmailAndPassword(auth, email, pass);
+                        await updateProfile(uc.user, { displayName: nick });
+                        await setDoc(doc(db, "users", uc.user.uid), {
+                            appTitle: "Link Manager", folders: [{ id: 'f_default', name: 'ブックマーク' }], links: [], bgConfig: { value:'stars' }
+                        });
+                    }
+                } catch (e) {
+                    if(e.code === 'auth/email-already-in-use') errorEl.textContent = "そのニックネームは既に使用されています";
+                    else if(e.code.includes('invalid') || e.code.includes('not-found') || e.code.includes('wrong-password')) {
+                        errorEl.textContent = "ニックネームかパスワードが違います";
+                        document.getElementById('inputPass').value = "";
+                    } else errorEl.textContent = e.message;
+                }
+            },
+            logout() { signOut(auth); },
+            async confirmDeleteAccount() {
+                if(!confirm("【警告】アカウントを削除しますか？")) return;
+                const pass = prompt("パスワードを入力:");
+                if(!pass) return;
+                try {
+                    const cred = EmailAuthProvider.credential(this.currentUser.email, pass);
+                    await reauthenticateWithCredential(this.currentUser, cred);
+                    await deleteDoc(doc(db, "users", this.currentUser.uid));
+                    await deleteUser(this.currentUser);
+                } catch(e) { alert(e.message); }
+            }
+        };
+
+        window.App = {
+            // 初期データ構造を保証
+            data: { appTitle: "Link Manager", folders: [], links: [], bgConfig: { value:'stars' } },
+            state: { activeFolderId: 'all', selectedLinkIds: new Set(), isMultiViewMode: false, sortOrder: 'dateDesc', searchQuery: '', pendingBgValue: '' },
+            currentUser: null, unsubscribe: null, dragSrcIndex: null, previewDragSrcIndex: null,
+
+            init(user) {
+                this.currentUser = user;
+                this.unsubscribe = onSnapshot(doc(db, "users", user.uid), (snap) => {
+                    if (snap.exists()) {
+                        this.data = snap.data();
+                        // ★修正: データ欠損対策 (linksが無くてもエラーにしない)
+                        if (!this.data.links) this.data.links = [];
+                        if (!this.data.folders) this.data.folders = [];
+                        
+                        document.getElementById('appTitleInput').value = this.data.appTitle || "Link Manager";
+                        
+                        this.renderMenu();
+                        this.renderLinks(); 
+                    } else {
+                        this.data = { appTitle: "Link Manager", folders: [{id:'f_def', name:'ブックマーク'}], links: [], bgConfig: { value:'stars' } };
+                        this.saveData();
+                    }
+                });
+            },
+            reset() { if(this.unsubscribe) this.unsubscribe(); },
+            async saveData() { if(this.currentUser) await setDoc(doc(db, "users", this.currentUser.uid), this.data); },
+
+            // --- Stub methods ---
+            renderBgPresets() {},
+            openBgModal() { alert("この機能は廃止されました"); },
+            saveBgSettings() { this.closeModals(); },
+
+            // --- Multi View D&D ---
+            handlePvDragStart(e, index) { this.previewDragSrcIndex = index; e.dataTransfer.effectAllowed = 'move'; e.target.closest('.preview-frame-wrapper').classList.add('dragging'); },
+            handlePvDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.target.closest('.preview-frame-wrapper')?.classList.add('drag-over'); return false; },
+            handlePvDragLeave(e) { e.target.closest('.preview-frame-wrapper')?.classList.remove('drag-over'); },
+            handlePvDrop(e, index) {
+                e.stopPropagation();
+                document.querySelectorAll('.preview-frame-wrapper').forEach(el => el.classList.remove('dragging', 'drag-over'));
+                if (this.previewDragSrcIndex !== null && this.previewDragSrcIndex !== index) {
+                    const container = document.getElementById('multiView');
+                    const items = Array.from(container.children);
+                    const srcItem = items[this.previewDragSrcIndex];
+                    if (this.previewDragSrcIndex < index) container.insertBefore(srcItem, items[index].nextSibling);
+                    else container.insertBefore(srcItem, items[index]);
+                }
+                return false;
+            },
+
+            onSearch(val) {
+                this.state.searchQuery = val.trim().toLowerCase();
+                const titleEl = document.getElementById('currentFolderName');
+                if (this.state.searchQuery) {
+                    titleEl.textContent = `🔍 "${val}"`;
+                    this.state.activeFolderId = null;
+                    this.renderMenu();
+                } else { this.selectFolder('all'); }
+                this.renderLinks();
+            },
+            handleDragStart(e, i) { this.dragSrcIndex = i; e.dataTransfer.effectAllowed = 'move'; e.target.classList.add('dragging'); },
+            handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.target.closest('.menu-item')?.classList.add('drag-over'); return false; },
+            handleDragLeave(e) { e.target.closest('.menu-item')?.classList.remove('drag-over'); },
+            async handleDrop(e, i) {
+                e.stopPropagation(); e.target.closest('.menu-item')?.classList.remove('drag-over');
+                document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('dragging', 'drag-over'));
+                if (this.dragSrcIndex !== null && this.dragSrcIndex !== i) {
+                    const item = this.data.folders[this.dragSrcIndex];
+                    this.data.folders.splice(this.dragSrcIndex, 1);
+                    this.data.folders.splice(i, 0, item);
+                    await this.saveData();
+                } return false;
+            },
+            toggleSidebar() { document.getElementById('sidebar').classList.toggle('hidden'); },
+            toggleSettingsMenu() { document.getElementById('settingsMenu').classList.toggle('show'); },
+            saveAppTitle(val) { this.data.appTitle = val; this.saveData(); },
+            setSort(val) { this.state.sortOrder = val; this.renderLinks(); },
+            selectFolder(id) {
+                this.state.activeFolderId = id; this.state.searchQuery = ''; document.getElementById('searchInput').value = '';
+                this.state.isMultiViewMode = false; this.renderMenu(); this.renderLinks(); this.updateUI();
+            },
+
+            // --- ★修正版: 強制リセット ---
+            clearSelection() { 
+                // 何があろうとまずはリセット
+                this.state.selectedLinkIds.clear(); 
+                this.state.isMultiViewMode = false; 
+                
+                // UIを即時復帰
+                document.getElementById('sidebar').classList.remove('hidden');
+                this.closePreview();
+                this.updateUI(); // これで「1件選択」は確実に消える
+                
+                // 最後に描画
+                this.renderLinks(); 
+            },
+
+            // --- ★修正版: エラー回避型の削除ロジック ---
+            async deleteSelectedLinks() { 
+                if(!confirm(`選択した ${this.state.selectedLinkIds.size} 件を削除しますか？`)) return; 
+                
+                // 1. 削除対象のIDを先に控えておく
+                const targets = new Set(this.state.selectedLinkIds);
+                
+                // 2. 【最重要】UIの状態を先に完全リセットする (データ処理のエラーに巻き込まれないように)
+                this.state.selectedLinkIds.clear(); 
+                this.state.isMultiViewMode = false; 
+                document.getElementById('sidebar').classList.remove('hidden');
+                this.closePreview();
+                this.updateUI(); // ヘッダーの選択表示を消去
+                
+                // 3. データ処理 (安全にフィルタリング)
+                if (this.data.links && Array.isArray(this.data.links)) {
+                    this.data.links = this.data.links.filter(l => l && !targets.has(l.id)); 
+                }
+
+                // 4. グリッド再描画
+                this.renderLinks(); 
+
+                // 5. 保存
+                await this.saveData(); 
+            },
+
+            renderMenu() {
+                const list = document.getElementById('folderList'); const sel = document.getElementById('selectFolder');
+                list.innerHTML = ''; sel.innerHTML = '';
+                const allLi = document.createElement('li');
+                allLi.className = `menu-item ${this.state.activeFolderId === 'all' && !this.state.searchQuery ? 'active' : ''}`;
+                allLi.innerHTML = `<span>📂 すべてのリンク</span>`; allLi.onclick = () => this.selectFolder('all'); list.appendChild(allLi);
+                if(this.data.folders) {
+                    this.data.folders.forEach((f, i) => {
+                        const li = document.createElement('li'); li.className = `menu-item draggable ${f.id === this.state.activeFolderId ? 'active' : ''}`;
+                        li.draggable = true;
+                        li.ondragstart = (e) => App.handleDragStart(e, i); li.ondragover = (e) => App.handleDragOver(e); li.ondragleave = (e) => App.handleDragLeave(e); li.ondrop = (e) => App.handleDrop(e, i);
+                        li.innerHTML = `<span onclick="App.selectFolder('${f.id}')" style="flex-grow:1">📁 ${f.name}</span><div class="menu-actions"><span onclick="App.openFolderModal('${f.id}')">✎</span><span onclick="App.deleteFolder('${f.id}')" style="margin-left:8px;">✕</span></div>`;
+                        list.appendChild(li); const opt = document.createElement('option'); opt.value = f.id; opt.textContent = f.name; sel.appendChild(opt);
+                    });
+                }
+                if(!this.state.searchQuery) document.getElementById('currentFolderName').textContent = this.state.activeFolderId === 'all' ? "すべてのリンク" : (this.data.folders.find(x=>x.id===this.state.activeFolderId)?.name || "...");
+            },
+
+            renderLinks() {
+                const grid = document.getElementById('gridView'); 
+                const multi = document.getElementById('multiView');
+                
+                // モードに応じて表示切り替え
+                if(this.state.isMultiViewMode) { 
+                    grid.style.display = 'none'; 
+                    multi.style.display = 'flex'; 
+                    this.renderMultiView(); 
+                    return; 
+                } else {
+                    grid.style.display = 'grid'; 
+                    multi.style.display = 'none'; 
+                }
+                
+                grid.innerHTML = '';
+                
+                let links = [];
+                // リンクデータがない場合の安全策
+                const sourceLinks = (this.data.links && Array.isArray(this.data.links)) ? this.data.links : [];
+
+                if (this.state.searchQuery) { 
+                    const q = this.state.searchQuery; 
+                    links = sourceLinks.filter(l => l.title.toLowerCase().includes(q) || l.url.toLowerCase().includes(q) || (l.tags && l.tags.some(t => t.toLowerCase().includes(q)))); 
+                } else { 
+                    links = this.state.activeFolderId === 'all' ? [...sourceLinks] : sourceLinks.filter(l => l.folderId === this.state.activeFolderId); 
+                }
+                
+                if(this.state.sortOrder === 'dateDesc') links.sort((a,b) => (b.id > a.id ? 1 : -1));
+                else if(this.state.sortOrder === 'dateAsc') links.sort((a,b) => (a.id > b.id ? 1 : -1));
+                else if(this.state.sortOrder === 'nameAsc') links.sort((a,b) => a.title.localeCompare(b.title));
+                else if(this.state.sortOrder === 'nameDesc') links.sort((a,b) => b.title.localeCompare(a.title));
+
+                if(links.length === 0) { 
+                    grid.innerHTML = `<div style="color:#aaa; grid-column:1/-1; text-align:center; margin-top:50px; font-size:0.9rem;">リンクがありません</div>`; 
+                    return; 
+                }
+                
+                links.forEach(link => {
+                    const isSel = this.state.selectedLinkIds.has(link.id); 
+                    const canEmbed = (link.canEmbed !== false);
+                    const card = document.createElement('div'); 
+                    card.className = `link-card ${isSel ? 'selected' : ''}`;
+                    card.onclick = (e) => { 
+                        if(e.target.closest('.card-actions')) return; 
+                        this.toggleSelection(link.id); 
+                    };
+                    
+                    card.innerHTML = `
+                        <div class="card-upper"><div class="link-title">${link.title}</div></div>
+                        <div class="card-lower">
+                            <div class="card-tags">${(link.tags||[]).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
+                            <div class="card-actions">
+                                <span class="mini-btn" onclick="App.openLinkModal('${link.id}')">✎</span>
+                                ${canEmbed ? `<span class="mini-btn" onclick="App.openPreview('${link.id}')" title="プレビュー">👁️</span>` : `<span class="mini-btn" onclick="window.open('${link.url}','_blank')">🚀</span>`}
+                            </div>
+                        </div>`;
+                    grid.appendChild(card);
+                }); 
+                
+                this.updateUI();
+            },
+            toggleSelection(id) { if(this.state.selectedLinkIds.has(id)) this.state.selectedLinkIds.delete(id); else this.state.selectedLinkIds.add(id); this.renderLinks(); this.updateUI(); },
+            updateUI() {
+                const count = this.state.selectedLinkIds.size; const area = document.getElementById('selectionArea');
+                if (count > 0) { area.style.display = 'flex'; document.getElementById('selectionCount').textContent = `${count}件選択`; document.getElementById('btnMultiPreview').disabled = false; document.getElementById('btnMultiDelete').style.display = 'inline-block'; }
+                else { area.style.display = 'none'; document.getElementById('btnMultiPreview').disabled = true; document.getElementById('btnMultiDelete').style.display = 'none'; }
+            },
+            toggleMultiView() { this.state.isMultiViewMode = !this.state.isMultiViewMode; if(this.state.isMultiViewMode) document.getElementById('sidebar').classList.add('hidden'); else document.getElementById('sidebar').classList.remove('hidden'); this.renderLinks(); },
+            renderMultiView() {
+                const con = document.getElementById('multiView'); 
+                con.innerHTML = '';
+                const targets = this.data.links.filter(l => this.state.selectedLinkIds.has(l.id));
+                const count = targets.length;
+
+                let basis = '300px'; 
+                if (count === 1) basis = 'calc(100% - 100px)';
+                else if (count === 2) basis = 'calc(50% - 40px)';
+                else basis = 'calc(33.333% - 30px)';
+
+                targets.forEach((l, i) => {
+                    const canEmbed = (l.canEmbed !== false); 
+                    const div = document.createElement('div'); 
+                    div.className = 'preview-frame-wrapper';
+                    div.style.flex = `0 0 ${basis}`;
+                    
+                    div.draggable = true;
+                    div.ondragstart = (e) => App.handlePvDragStart(e, i); 
+                    div.ondragover = (e) => App.handlePvDragOver(e); 
+                    div.ondragleave = (e) => App.handlePvDragLeave(e); 
+                    div.ondrop = (e) => App.handlePvDrop(e, i);
+                    
+                    let content = canEmbed 
+                        ? `<iframe src="${l.url}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>` 
+                        : `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; color:#333; background:#f0f0f0;"><p style="margin-bottom:10px;font-size:0.9rem;color:#666;">${l.url}</p><button class="btn-primary" onclick="window.open('${l.url}','_blank')">外部で開く</button></div>`;
+                    
+                    div.innerHTML = `<div class="preview-header"><span>${l.title}</span><span style="font-size:0.7rem; opacity:0.7;">☰ Drag</span></div>${content}`; 
+                    con.appendChild(div);
+                });
+            },
+            openPreview(id) { const l = this.data.links.find(x => x.id === id); document.getElementById('previewTitle').textContent = l.title; document.getElementById('previewExtLink').href = l.url; document.getElementById('previewFrame').src = l.url; document.getElementById('previewPanel').classList.add('open'); },
+            closePreview() { document.getElementById('previewPanel').classList.remove('open'); setTimeout(() => document.getElementById('previewFrame').src = '', 300); },
+            openFolderModal(id) { document.getElementById('folderModal').style.display = 'flex'; document.getElementById('editFolderId').value = id || ''; document.getElementById('inputFolderName').value = id ? this.data.folders.find(x => x.id === id).name : ''; },
+            async saveFolder() { const id = document.getElementById('editFolderId').value; const name = document.getElementById('inputFolderName').value; if (!name) return; if (id) this.data.folders.find(x => x.id === id).name = name; else this.data.folders.push({ id: 'f' + Date.now(), name }); await this.saveData(); this.closeModals(); },
+            async deleteFolder(id) { if (!confirm('フォルダを削除しますか？')) return; this.data.folders = this.data.folders.filter(x => x.id !== id); this.data.links = this.data.links.filter(x => x.folderId !== id); this.selectFolder('all'); await this.saveData(); },
+            openLinkModal(id) { document.getElementById('linkModal').style.display = 'flex'; document.getElementById('editLinkId').value = id || ''; const l = id ? this.data.links.find(x => x.id === id) : {}; document.getElementById('inputLinkTitle').value = l.title || ''; document.getElementById('inputLinkUrl').value = l.url || ''; document.getElementById('inputLinkTags').value = (l.tags || []).join(','); document.getElementById('selectFolder').value = l.folderId || (this.state.activeFolderId === 'all' && this.data.folders[0] ? this.data.folders[0].id : this.state.activeFolderId); document.getElementById('checkNoEmbed').checked = (l.canEmbed === false); },
+            async saveLink() { const id = document.getElementById('editLinkId').value; const title = document.getElementById('inputLinkTitle').value; const url = document.getElementById('inputLinkUrl').value; const tags = document.getElementById('inputLinkTags').value.split(',').filter(x => x); const fid = document.getElementById('selectFolder').value; const canEmbed = !document.getElementById('checkNoEmbed').checked; if (!title || !url) return; if (id) { const idx = this.data.links.findIndex(x => x.id === id); this.data.links[idx] = { ...this.data.links[idx], title, url, tags, folderId: fid, canEmbed }; } else { this.data.links.push({ id: 'l' + Date.now(), title, url, tags, folderId: fid, canEmbed }); } await this.saveData(); this.closeModals(); },
+            isBlockedDomain(url) { try { return BLOCKED_DOMAINS.some(d => new URL(url).hostname.includes(d)); } catch(e) { return false; } },
+            autoDetectEmbed(url) { if (this.isBlockedDomain(url)) document.getElementById('checkNoEmbed').checked = true; },
+            closeModals() { document.querySelectorAll('.modal-overlay').forEach(e => e.style.display = 'none'); }
+        };
+        Auth.init();
+    </script>
+</body>
+</html>
